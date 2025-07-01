@@ -1,84 +1,105 @@
 import streamlit as st
-
-# Define emission factors (example values, replace with accurate data)
+import matplotlib.pyplot as plt
+import pandas as pd
+import io
+# Define emission factors
 EMISSION_FACTORS = {
     "India": {
-        "Transportation": 0.14,  # kgCO2/km
-        "Electricity": 0.82,  # kgCO2/kWh
-        "Diet": 1.25,  # kgCO2/meal, 2.5kgco2/kg
-        "Waste": 0.1  # kgCO2/kg
+        "Transportation": 0.14,  # kg CO2 per km
+        "Electricity": 0.82,     # kg CO2 per kWh
+        "Diet": 1.25,            # kg CO2 per meal
+        "Waste": 0.1             # kg CO2 per kg
     }
 }
 
-# Set wide layout and page name
+# Set layout and title
 st.set_page_config(layout="wide", page_title="Personal Carbon Calculator")
+st.title("🌿 Personal Carbon Calculator App")
 
-# Streamlit app code
-st.title("Personal Carbon Calculator App ⚠️")
+# Country (only India for now)
+country = st.selectbox("🌍 Select your country", ["India"])
 
-# User inputs
-st.subheader("🌍 Your Country")
-country = st.selectbox("Select", ["India"])
-
+# Input columns
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("🚗 Daily commute distance (in km)")
-    distance = st.slider("Distance", 0.0, 100.0, key="distance_input")
-
-    st.subheader("💡 Monthly electricity consumption (in kWh)")
-    electricity = st.slider("Electricity", 0.0, 1000.0, key="electricity_input")
+    distance = st.slider("🚗 Daily commute distance (km)", 0.0, 100.0, 10.0)
+    electricity = st.slider("💡 Monthly electricity consumption (kWh)", 0.0, 1000.0, 250.0)
 
 with col2:
-    st.subheader("🍽️ Waste generated per week (in kg)")
-    waste = st.slider("Waste", 0.0, 100.0, key="waste_input")
+    waste = st.slider("🗑️ Weekly waste generation (kg)", 0.0, 100.0, 5.0)
+    meals = st.number_input("🍽️ Meals per day", 0, 10, 3)
 
-    st.subheader("🍽️ Number of meals per day")
-    meals = st.number_input("Meals", 0, key="meals_input")
+# Normalize to yearly
+distance *= 365
+electricity *= 12
+waste *= 52
+meals *= 365
 
-# Normalize inputs
-if distance > 0:
-    distance = distance * 365  # Convert daily distance to yearly
-if electricity > 0:
-    electricity = electricity * 12  # Convert monthly electricity to yearly
-if meals > 0:
-    meals = meals * 365  # Convert daily meals to yearly
-if waste > 0:
-    waste = waste * 52  # Convert weekly waste to yearly
+# Emission calculation
+transport = EMISSION_FACTORS[country]["Transportation"] * distance / 1000
+power = EMISSION_FACTORS[country]["Electricity"] * electricity / 1000
+diet = EMISSION_FACTORS[country]["Diet"] * meals / 1000
+trash = EMISSION_FACTORS[country]["Waste"] * waste / 1000
 
-# Calculate carbon emissions
-transportation_emissions = EMISSION_FACTORS[country]["Transportation"] * distance
-electricity_emissions = EMISSION_FACTORS[country]["Electricity"] * electricity
-diet_emissions = EMISSION_FACTORS[country]["Diet"] * meals
-waste_emissions = EMISSION_FACTORS[country]["Waste"] * waste
+total = round(transport + power + diet + trash, 2)
 
-# Convert emissions to tonnes and round off to 2 decimal points
-transportation_emissions = round(transportation_emissions / 1000, 2)
-electricity_emissions = round(electricity_emissions / 1000, 2)
-diet_emissions = round(diet_emissions / 1000, 2)
-waste_emissions = round(waste_emissions / 1000, 2)
+# Pie chart data
+emission_data = {
+    "Transportation": transport,
+    "Electricity": power,
+    "Diet": diet,
+    "Waste": trash
+}
 
-# Calculate total emissions
-total_emissions = round(
-    transportation_emissions + electricity_emissions + diet_emissions + waste_emissions, 2
-)
-
+# Display emissions
 if st.button("Calculate CO2 Emissions"):
-
-    # Display results
-    st.header("Results")
-
+    st.header("📊 Your Emissions Summary")
     col3, col4 = st.columns(2)
 
     with col3:
-        st.subheader("Carbon Emissions by Category")
-        st.info(f"🚗 Transportation: {transportation_emissions} tonnes CO2 per year")
-        st.info(f"💡 Electricity: {electricity_emissions} tonnes CO2 per year")
-        st.info(f"🍽️ Diet: {diet_emissions} tonnes CO2 per year")
-        st.info(f"🗑️ Waste: {waste_emissions} tonnes CO2 per year")
+        st.subheader("🛋️ Breakdown")
+        st.info(f"Transportation: {transport:.2f} tonnes/year")
+        st.info(f"Electricity: {power:.2f} tonnes/year")
+        st.info(f"Diet: {diet:.2f} tonnes/year")
+        st.info(f"Waste: {trash:.2f} tonnes/year")
 
     with col4:
-        st.subheader("Total Carbon Footprint")
-        
-        st.success(f"🌍 Your total carbon footprint is: {total_emissions} tonnes CO2 per year")
-        st.warning("In 2021, CO2 emissions per capita for India was 1.9 tons of CO2 per capita. Between 1972 and 2021, CO2 emissions per capita of India grew substantially from 0.39 to 1.9 tons of CO2 per capita rising at an increasing annual rate that reached a maximum of 9.41% in 2021")
+        st.subheader("🌿 Total Carbon Footprint")
+        st.success(f"{total} tonnes CO2 per year")
+
+        # Pie chart
+        fig, ax = plt.subplots()
+        ax.pie(emission_data.values(), labels=emission_data.keys(), autopct='%1.1f%%', startangle=90)
+        ax.axis('equal')
+        st.pyplot(fig)
+
+    # Tips section
+    st.markdown("---")
+    top_source = max(emission_data, key=emission_data.get)
+    tips = {
+        "Transportation": ["Use public transport", "Carpool", "Switch to cycling"],
+        "Electricity": ["Use LED bulbs", "Unplug idle electronics", "Use solar where possible"],
+        "Diet": ["Reduce red meat", "Avoid food waste", "Try plant-based meals"],
+        "Waste": ["Recycle", "Compost organic waste", "Avoid plastic packaging"]
+    }
+
+    st.subheader(f"🔹 Tips to reduce {top_source} emissions:")
+    for tip in tips[top_source]:
+        st.write(f"- {tip}")
+    # CSV Export
+    st.markdown("---")
+    st.subheader("📥 Download Your Emission Report")
+    df = pd.DataFrame({
+        "Category": list(emission_data.keys()) + ["Total"],
+        "Emissions (tonnes CO2/year)": [round(v, 2) for v in emission_data.values()] + [total]
+    })
+
+    csv_buffer = io.StringIO()
+    df.to_csv(csv_buffer, index=False)
+    st.download_button(
+        label="Download Emission Report as CSV",
+        data=csv_buffer.getvalue(),
+        file_name="carbon_emission_report.csv",
+        mime="text/csv"
+    )
